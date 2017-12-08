@@ -1,0 +1,100 @@
+【HTTPSをたてる手順】
+
+(1) Apacheのインストール
+# apt install apache2
+# apache2 -v
+Server version: Apache/2.4.29 (Debian)
+Server built:   2017-10-23T14:46:55
+# systemctl start apache2 (or # apachectl start)
+# firefox https://127.0.0.1:80
+
+
+(2) OpenSSLのインストール
+# apt install openssl
+# openssl version
+OpenSSL 1.1.0g  2 Nov 2017
+
+
+(3) サーバの秘密鍵と公開鍵証明書をつくる
+# cd /etc/ssl/private/
+# openssl genrsa -aes128 -out server.key 2048
+ ※ パスフレーズは"panasonic"
+# openssl req -new -days 3650 -key server.key -out server.csr
+# openssl x509 -in server.csr -out server.crt -req -signkey server.key -days 3650
+# chmod 400 server.*
+
+
+(4) SSLを有効にする
+# emacs /etc/apache2/sites-available/default-ssl.conf　（変更）
+　(4.1) アドレスは公開鍵証明書をつくったときに入力したものに変更
+  ServerAdmin gonda.akihiko@jp.panasonic.com
+　(4.2)　つくった公開鍵証明書と秘密鍵のパスに変更
+  #   SSLCertificateFile directive is needed.                     
+  SSLCertificateFile      /etc/ssl/private/server.crt
+  SSLCertificateKeyFile /etc/ssl/private/server.key
+# a2ensite default-ssl.conf
+# systemctl reload apache2
+# a2enmod ssl
+# systemctl reload apache2
+Enter passphrase for SSL/TLS keys for kali.localhost:443 (RSA): *********
+# firefox https://127.0.0.1:443
+　（注意： SSL_ERROR_RX_RECORD_TOO_LONGというエラー）
+
+(5) TLSのバージョンの選択
+# emacs /etc/apache2/mods-available/ssl.conf　（変更）
+　SSLProtocol all -SSLv3 → サーバはTLSv1, TLSv1.1, TLSv1.2をサポート
+　SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1 → サーバはTLSv1.2だけをサポート
+# systemctl reload apache2
+
+
+(6) 暗号スイートの選択
+# emacs /etc/apache2/mods-available/ssl.conf （追記）
+　#   SSL Cipher Suite:         
+　#   List the ciphers that the client is permitted to negotiate. See the 
+　#   ciphers(1) man page from the openssl package for list of all available
+　#   options.                                                 
+　#   Enable only secure ciphers:             
+　SSLHonorCipherOrder ON
+　SSLCipherSuite EECDH+HIGH:EDH+HIGH:HIGH:MEDIUM:+3DES:!ADH:!RC4:!MD5:!aNULL:!eNULL:!SSLv2:!LOW:!EXP:!PSK:!SRP:!DSS:!KRB5:!SEED:!SHA
+（参考）https://qiita.com/sion_cojp/items/99fee211ceace3f76cff
+# systemctl reload apache2
+
+
+(7) クライアント証明書(PKCS#12)をつくる
+# openssl pkcs12 -export -inkey server.key -in server.crt -out server.p12
+Enter pass phrase for server.key: [panasonic]
+Enter Export Password:[1qaz!QAZ]
+Verifying - Enter Export Password:[1qaz!QAZ]
+# emacs /etc/apache2/sites-available/default-ssl.conf（変更）
+　#   Client Authentication (Type):
+　#   Client certificate verification type and depth.  Types are
+　#   none, optional, require and optional_no_ca.  Depth is a
+　#   number which specifies how deeply to verify the certificate
+　#   issuer chain before deciding the certificate is not valid.
+　SSLVerifyClient require
+　SSLVerifyDepth  10
+# systemctl reload apache2
+
+(8) サーバがクライアント証明書を検証するようにする
+# emacs /etc/apache2/sites-available/default-ssl.conf（変更）
+　#   Certificate Authority (CA):
+　#   Set the CA certificate verification path where to find CA
+　#   certificates for client authentication or alternatively one
+　#   huge file containing all of them (file must be PEM encoded)
+　#   Note: Inside SSLCACertificatePath you need hash symlinks
+　#                to point to the certificate files. Use the provided
+　#                Makefile to update the hash symlinks after changes.
+　SSLCACertificatePath /etc/ssl/private/
+　SSLCACertificateFile /etc/ssl/private/server.crt
+# systemctl reload apache2
+
+(9) クライアント証明書をブラウザにインポートする
+# firefox about:preferences
+[Advanced]→[View Certificates]→[Your Certificates]→[Import]でserver.p12をインポート
+
+
+(10) 80番ポートを閉じる
+# emacs /etc/apache2/port.conf（変更）
+　# Listen 80 ← コメントアウト
+# systemctl reload apache2
+

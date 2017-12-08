@@ -1,0 +1,42 @@
+【Burpプロキシを通してNiktoをかける方法】
+
+[設定]
++ PC1: 192.168.11.2:8080でBurpプロキシ
++ PC2: Niktoを実行
+
+[PC1]
++ BurpSuiteを起動
++ [Proxy]→[Options]→[Proxy Listeners]
++ AddしてBind to addressでAll interfacesを選んでOK
+
+[PC2]
+（プロキシの確認）
++ Webブラウザからhttp://192.168.11.2:8080にアクセスしてcacert.derをダウンロード
++ Webブラウザにcacert.derをインポート
++ Webブラウザで任意のページにアクセスする
++ PC1側で[Proxy]→[HTTP history]に正しく履歴が出てることを確認する
+（ここからNiktoの設定）
++ /etc/nikto.confのプロキシ設定の項目を次のする
+# Proxy settings -- still must be enabled by -useproxy                          
+PROXYHOST=192.168.11.2
+PROXYPORT=8080
+#PROXYUSER=proxyuserid                                                          
+#PROXYPASS=proxypassword  
++ さらにSSLのライブラリLW_SSL_ENGINEをSSLeayまたはSSLのどちらかに変える
+（今回はSSLeay）
+# Choose SSL libs:                                                              
+# SSLeay        - use Net::SSLeay                                               
+# SSL           - use Net::SSL                                                  
+# auto          - automatically choose whats available                          
+#                 (SSLeay wins if both are available)                           
+
+#LW_SSL_ENGINE=auto                                                             
+LW_SSL_ENGINE=SSLeay
++ Niktoの実行
+# nikto -host https://tit03.devmga.com -port 443 -useproxy
++ PC1側で[Proxy]→[HTTP history]に正しく履歴が出てることを確認する
+
+以上
+
+参考になりそうなサイト：
+https://www.securestate.com/blog/2012/12/12/burp-suite-series-using-burp-proxy-with-client-side-certificates-and-non-proxy-aware-applications-4
